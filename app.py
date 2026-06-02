@@ -4,12 +4,26 @@ import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
 
-st.set_page_config(page_title="US Stock Market - Sector RRG", layout="wide")
-st.title("🇺🇸 US Sector Rotation - Relative Rotation Graph (RRG)")
-st.write("S&P 500 ke saare major sectors ka rotation track kariye relative to SPY (Benchmark).")
+# Professional Dashboard Configuration
+st.set_page_config(
+    page_title="US Market Sector RRG Pro", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom Premium Styling for Clean Look
+st.markdown("""
+    <style>
+    .main .block-container { padding-top: 1.5rem; padding-bottom: 1.5rem; }
+    h1 { font-weight: 800; color: #1E293B; letter-spacing: -1px; }
+    .stTabs [data-baseweb="tab"] { font-size: 16px; font-weight: 600; padding: 10px 20px; }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("🎯 Institutional Sector Rotation (RRG Dashboard)")
+st.caption("⚡ Premium Full-Screen Visualizer | Benchmark: SPY (S&P 500)")
 
 def calculate_rrg(tickers, benchmark, interval, window=14, tail_length=5):
-    # US Market hourly data limits handle karne ke liye optimized periods
     if interval == '60m':
         period = '1mo'
     elif interval == '1d':
@@ -20,8 +34,6 @@ def calculate_rrg(tickers, benchmark, interval, window=14, tail_length=5):
         period = 'max'
 
     all_tickers = list(tickers.keys()) + [benchmark]
-    
-    # Download data safely from US Exchanges
     data = yf.download(all_tickers, period=period, interval=interval, progress=False)
     
     if data.empty:
@@ -31,8 +43,8 @@ def calculate_rrg(tickers, benchmark, interval, window=14, tail_length=5):
         data = data['Close']
         
     data = data.ffill().bfill()
-    
     valid_tickers = [t for t in tickers.keys() if t in data.columns and not data[t].isna().all()]
+    
     if not valid_tickers or benchmark not in data.columns:
         return pd.DataFrame(), pd.DataFrame()
     
@@ -54,106 +66,120 @@ def calculate_rrg(tickers, benchmark, interval, window=14, tail_length=5):
     std_mom = rs_mom_smoothed.rolling(window=window).std()
     jdk_rs_momentum = 100 + ((rs_mom_smoothed - mean_mom) / std_mom) * 10
     
-    jdk_rs_ratio = jdk_rs_ratio.dropna().tail(tail_length)
-    jdk_rs_momentum = jdk_rs_momentum.dropna().tail(tail_length)
-    
-    return jdk_rs_ratio, jdk_rs_momentum
+    return jdk_rs_ratio.dropna().tail(tail_length), jdk_rs_momentum.dropna().tail(tail_length)
 
-def plot_rrg(jdk_rs_ratio, jdk_rs_momentum, tickers, timeframe_title):
+def plot_rrg_clean(jdk_rs_ratio, jdk_rs_momentum, tickers, title, show_labels):
     if jdk_rs_ratio.empty or jdk_rs_momentum.empty:
         fig = go.Figure()
-        fig.add_annotation(text="Data not available for this timeframe right now.", showarrow=False, font=dict(size=16))
-        fig.update_layout(title=f"Timeframe: {timeframe_title}", height=400)
+        fig.add_annotation(text="No operational data available for this frame.", showarrow=False, font=dict(size=16))
         return fig
         
     fig = go.Figure()
-    max_val = max(102, max(jdk_rs_ratio.max().max(), jdk_rs_momentum.max().max()))
-    min_val = min(98, min(jdk_rs_ratio.min().min(), jdk_rs_momentum.min().min()))
-    padding = max(abs(max_val - 100), abs(100 - min_val)) + 0.5
     
-    x_range = [100 - padding, 100 + padding]
-    y_range = [100 - padding, 100 + padding]
+    # Calculate premium responsive grid padding
+    all_x = jdk_rs_ratio.values.flatten()
+    all_y = jdk_rs_momentum.values.flatten()
+    max_pad = max(abs(all_x.max() - 100), abs(100 - all_x.min()), abs(all_y.max() - 100), abs(100 - all_y.min())) + 1.2
     
-    # 4 Quadrants Background Color Setup
-    fig.add_shape(type="rect", x0=100, y0=100, x1=100+padding, y1=100+padding, fillcolor="rgba(0,255,0,0.05)", line_width=0)
-    fig.add_shape(type="rect", x0=100, y0=100-padding, x1=100+padding, y1=100, fillcolor="rgba(255,255,0,0.05)", line_width=0)
-    fig.add_shape(type="rect", x0=100-padding, y0=100-padding, x1=100, y1=100, fillcolor="rgba(255,0,0,0.05)", line_width=0)
-    fig.add_shape(type="rect", x0=100-padding, y0=100, x1=100, y1=100+padding, fillcolor="rgba(0,0,255,0.05)", line_width=0)
+    x_range = [100 - max_pad, 100 + max_pad]
+    y_range = [100 - max_pad, 100 + max_pad]
     
+    # Elegant Aesthetic Quadrant Shading
+    fig.add_shape(type="rect", x0=100, y0=100, x1=100+max_pad, y1=100+max_pad, fillcolor="rgba(34,197,94,0.03)", line_width=0)  # LEADING
+    fig.add_shape(type="rect", x0=100, y0=100-max_pad, x1=100+max_pad, y1=100, fillcolor="rgba(234,179,8,0.03)", line_width=0)   # WEAKENING
+    fig.add_shape(type="rect", x0=100-max_pad, y0=100-max_pad, x1=100, y1=100, fillcolor="rgba(239,68,68,0.03)", line_width=0)   # LAGGING
+    fig.add_shape(type="rect", x0=100-max_pad, y0=100, x1=100, y1=100+max_pad, fillcolor="rgba(59,130,246,0.03)", line_width=0)  # IMPROVING
+    
+    # Center Crosshairs
+    fig.add_shape(type="line", x0=100, y0=100-max_pad, x1=100, y1=100+max_pad, line=dict(color="rgba(100,116,139,0.4)", width=1.5, dash="dash"))
+    fig.add_shape(type="line", x0=100-max_pad, y0=100, x1=100+max_pad, y1=100, line=dict(color="rgba(100,116,139,0.4)", width=1.5, dash="dash"))
+    
+    # Plot Trajectories
     for col in jdk_rs_ratio.columns:
-        x_data = jdk_rs_ratio[col].values
-        y_data = jdk_rs_momentum[col].values
+        x_vals = jdk_rs_ratio[col].values
+        y_vals = jdk_rs_momentum[col].values
+        display_name = tickers.get(col, col).split(" ")[0] # Clean short code for crisp UI
         
-        display_name = tickers.get(col, col)
-        
+        # Micro-tails for history trace
         fig.add_trace(go.Scatter(
-            x=x_data, y=y_data, mode='lines+markers',
-            name=display_name, line=dict(width=2),
-            marker=dict(size=[6]*(len(x_data)-1) + [12], symbol=['circle']*(len(x_data)-1) + ['arrow-bar-up'])
+            x=x_vals, y=y_vals,
+            mode='lines+markers',
+            name=tickers.get(col, col),
+            line=dict(width=2.5),
+            marker=dict(
+                size=[5]*(len(x_vals)-1) + [13],
+                symbol=['circle']*(len(x_vals)-1) + ['triangle-up'],
+                line=dict(width=1, color="white")
+            ),
+            hovertemplate=f"<b>{tickers.get(col,col)}</b><br>RS Ratio: %{{x:.2f}}<br>RS Momentum: %{{y:.2f}}<extra></extra>"
         ))
-        fig.add_annotation(
-            x=x_data[-1], y=y_data[-1], text=display_name,
-            showarrow=True, arrowhead=1, ax=20, ay=-20
-        )
         
-    fig.add_shape(type="line", x0=100, y0=100-padding, x1=100, y1=100+padding, line=dict(color="black", width=1, dash="dash"))
-    fig.add_shape(type="line", x0=100-padding, y0=100, x1=100+padding, y1=100, line=dict(color="black", width=1, dash="dash"))
+        # Toggleable labels via Sidebar check state
+        if show_labels:
+            fig.add_annotation(
+                x=x_vals[-1], y=y_vals[-1],
+                text=f" <b>{display_name}</b>",
+                showarrow=False,
+                xshift=12, yshift=5,
+                font=dict(size=11, color="#334155"),
+                align="left"
+            )
+            
+    # Quadrant Floating Title Tags
+    fig.add_annotation(x=100+max_pad*0.7, y=100+max_pad*0.85, text="🟩 LEADING", font=dict(color="#16a34a", size=14, weight="bold"), showarrow=False)
+    fig.add_annotation(x=100+max_pad*0.7, y=100-max_pad*0.85, text="🟨 WEAKENING", font=dict(color="#ca8a04", size=14, weight="bold"), showarrow=False)
+    fig.add_annotation(x=100-max_pad*0.7, y=100-max_pad*0.85, text="🟥 LAGGING", font=dict(color="#dc2626", size=14, weight="bold"), showarrow=False)
+    fig.add_annotation(x=100-max_pad*0.7, y=100+max_pad*0.85, text="🟦 IMPROVING", font=dict(color="#2563eb", size=14, weight="bold"), showarrow=False)
     
-    fig.add_annotation(x=100+padding/2, y=100+padding/1.1, text="LEADING", font=dict(color="green", size=14), showarrow=False)
-    fig.add_annotation(x=100+padding/2, y=100-padding/1.1, text="WEAKENING", font=dict(color="orange", size=14), showarrow=False)
-    fig.add_annotation(x=100-padding/2, y=100-padding/1.1, text="LAGGING", font=dict(color="red", size=14), showarrow=False)
-    fig.add_annotation(x=100-padding/2, y=100+padding/1.1, text="IMPROVING", font=dict(color="blue", size=14), showarrow=False)
-    
+    # Modern Layout Geometry
     fig.update_layout(
-        title=f"Timeframe: {timeframe_title}",
-        xaxis_title="RS Ratio (Trend)", yaxis_title="RS Momentum (Speed)",
-        xaxis=dict(range=x_range), yaxis=dict(range=y_range),
-        height=650, showlegend=True
+        xaxis_title="👉 Trend Strength (RS Ratio)",
+        yaxis_title="🚀 Sector Velocity (RS Momentum)",
+        xaxis=dict(range=x_range, gridcolor="rgba(241,245,249,1)", zeroline=False),
+        yaxis=dict(range=y_range, gridcolor="rgba(241,245,249,1)", zeroline=False),
+        height=800, # Max-scale full screen view
+        margin=dict(l=20, r=20, t=40, b=20),
+        plot_bgcolor='white',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     return fig
 
-# --- Elite US Sector Mapping (SPDR ETFs) ---
+# Clean Asset Matrix
 us_sectors = {
-    'XLK': 'TECHNOLOGY (Apple, Microsoft, Nvidia)',
-    'XLY': 'CONS. DISCRETIONARY (Amazon, Tesla)',
-    'XLP': 'CONS. STAPLES (Walmart, Coca-Cola)',
-    'XLF': 'FINANCIALS (JPMorgan, BofA)',
-    'XLV': 'HEALTHCARE (Johnson & Johnson, UnitedHealth)',
-    'XLE': 'ENERGY (ExxonMobil, Chevron)',
-    'XLI': 'INDUSTRIALS (Caterpillar, GE)',
-    'XLB': 'MATERIALS (Linde, FreePort)',
-    'XLU': 'UTILITIES (NextEra, NextGen)',
-    'XLRE': 'REAL ESTATE (Prologis, American Tower)',
-    'XLC': 'COMMUNICATION (Alphabet/Google, Meta/FB)'
+    'XLK': 'XLK (Technology)', 'XLY': 'XLY (Consumer Disc)', 'XLP': 'XLP (Consumer Staples)',
+    'XLF': 'XLF (Financials)', 'XLV': 'XLV (Healthcare)', 'XLE': 'XLE (Energy)',
+    'XLI': 'XLI (Industrials)', 'XLB': 'XLB (Materials)', 'XLU': 'XLU (Utilities)',
+    'XLRE': 'XLRE (Real Estate)', 'XLC': 'XLC (Communication)'
 }
-# Standard S&P 500 ETF Benchmark
 us_benchmark = 'SPY'
 
-st.sidebar.header("Settings")
-tail = st.sidebar.slider("Tail Length (History)", min_value=3, max_value=12, value=5)
+# --- Sidebar ---
+st.sidebar.header("🎨 Display Settings")
+tail = st.sidebar.slider("Tail Length (History history)", min_value=3, max_value=15, value=5)
 
-if st.sidebar.button("🔄 Refresh US Data"):
+# CRITICAL FIX: To prevent kachra layout, label toggle control added
+overlay_labels = st.sidebar.checkbox("Show Chart Labels Directly", value=False, help="Agach-bagach se bachne ke liye ise off rakhein, individual points par touch karke details dekh sakte hain.")
+
+st.sidebar.markdown("---")
+if st.sidebar.button("🔄 Hard Reload Canvas", use_container_width=True):
     st.cache_data.clear()
     st.rerun()
 
-tab1, tab2, tab3, tab4 = st.tabs(["Hourly (60m)", "Daily (1d)", "Weekly (1wk)", "Monthly (1mo)"])
+# --- Responsive Tab Grid ---
+t1, t2, t3, t4 = st.tabs(["📊 Hourly View", "📈 Daily Matrix", "📆 Weekly Rotation", "⏳ Monthly Macro"])
 
-with tab1:
-    with st.spinner("Fetching Live Hourly US Sector RRG..."):
-        rh, mh = calculate_rrg(us_sectors, us_benchmark, '60m', tail_length=tail)
-        st.plotly_chart(plot_rrg(rh, mh, us_sectors, "Hourly"), use_container_width=True)
+with t1:
+    r, m = calculate_rrg(us_sectors, us_benchmark, '60m', tail_length=tail)
+    st.plotly_chart(plot_rrg_clean(r, m, us_sectors, "Hourly", overlay_labels), use_container_width=True)
 
-with tab2:
-    with st.spinner("Fetching Daily US Sector RRG..."):
-        rd, md = calculate_rrg(us_sectors, us_benchmark, '1d', tail_length=tail)
-        st.plotly_chart(plot_rrg(rd, md, us_sectors, "Daily"), use_container_width=True)
+with t2:
+    r, m = calculate_rrg(us_sectors, us_benchmark, '1d', tail_length=tail)
+    st.plotly_chart(plot_rrg_clean(r, m, us_sectors, "Daily", overlay_labels), use_container_width=True)
 
-with tab3:
-    with st.spinner("Fetching Weekly US Sector RRG..."):
-        rw, mw = calculate_rrg(us_sectors, us_benchmark, '1wk', tail_length=tail)
-        st.plotly_chart(plot_rrg(rw, mw, us_sectors, "Weekly"), use_container_width=True)
+with t3:
+    r, m = calculate_rrg(us_sectors, us_benchmark, '1wk', tail_length=tail)
+    st.plotly_chart(plot_rrg_clean(r, m, us_sectors, "Weekly", overlay_labels), use_container_width=True)
 
-with tab4:
-    with st.spinner("Fetching Monthly US Sector RRG..."):
-        rm, mm = calculate_rrg(us_sectors, us_benchmark, '1mo', tail_length=tail)
-        st.plotly_chart(plot_rrg(rm, mm, us_sectors, "Monthly"), use_container_width=True)
+with t4:
+    r, m = calculate_rrg(us_sectors, us_benchmark, '1mo', tail_length=tail)
+    st.plotly_chart(plot_rrg_clean(r, m, us_sectors, "Monthly", overlay_labels), use_container_width=True)
